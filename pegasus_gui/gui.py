@@ -129,9 +129,21 @@ class PegasusWindow(QtWidgets.QWidget):
         ipv4_box.setLayout(ipv4_layout)
         layout.addWidget(ipv4_box)
 
-        self.load_module_btn = QtWidgets.QPushButton("Load module pegasus.ko")
+        # --- ИЗМЕНЕНИЯ НАЧИНАЮТСЯ ЗДЕСЬ ---
+
+        # 1. Проверяем, загружен ли модуль при запуске
+        self.module_loaded = self._is_module_loaded()
+
+        # 2. Создаем кнопку и устанавливаем текст в зависимости от состояния модуля
+        self.load_module_btn = QtWidgets.QPushButton()
+        self._update_module_button_text()
         layout.addWidget(self.load_module_btn)
-        self.load_module_btn.clicked.connect(self.handle_load_module)
+
+        # 3. Подключаем новый обработчик-переключатель
+        self.load_module_btn.clicked.connect(self.handle_toggle_module)
+
+        # --- ИЗМЕНЕНИЯ ЗАКАНЧИВАЮТСЯ ЗДЕСЬ ---
+
         # IPv6 block controls
         ipv6_box = QtWidgets.QGroupBox("")
         ipv6_layout = QtWidgets.QHBoxLayout()
@@ -211,7 +223,7 @@ class PegasusWindow(QtWidgets.QWidget):
         super().resizeEvent(event)
         if getattr(self, "_bg_label", None):
             self._bg_label.setGeometry(0, 0, self.width(), self.height())
-# rescale original pixmap to window size to avoid blurry repeats
+            # rescale original pixmap to window size to avoid blurry repeats
             orig = QPixmap(str(Path(__file__).resolve().parent.parent / "pegasus_image.jpg"))
             if not orig.isNull():
                 scaled = orig.scaled(self.size(), QtCore.Qt.AspectRatioMode.KeepAspectRatioByExpanding, QtCore.Qt.TransformationMode.SmoothTransformation)
@@ -228,7 +240,82 @@ class PegasusWindow(QtWidgets.QWidget):
             self.log_msg(f"ERROR opening device: {e}")
             return None
 
-    # Handlers
+    # --- НОВЫЕ И ОБНОВЛЕННЫЕ ФУНКЦИИ ---
+
+    def _is_module_loaded(self):
+        """Проверяет, загружен ли модуль ядра 'pegasus'."""
+        try:
+            # Команда вернет 0, если модуль найден
+            result = subprocess.run("lsmod | grep -w '^pegasus'", shell=True, capture_output=True, text=True)
+            return result.returncode == 0
+        except Exception as e:
+            self.log_msg(f"Could not check module status: {e}")
+            return False
+
+    def _update_module_button_text(self):
+        """Обновляет текст на кнопке в зависимости от состояния модуля."""
+        text = "Unload module pegasus.ko" if self.module_loaded else "Load module pegasus.ko"
+        self.load_module_btn.setText(text)
+
+    def handle_toggle_module(self):
+        """Обрабатывает загрузку или выгрузку модуля в зависимости от текущего состояния."""
+        # Если модуль загружен, выгружаем его
+        if self.module_loaded:
+            modname = "pegasus"
+            try:
+                cmd = ["sudo", "rmmod", modname] if os.geteuid() != 0 else ["rmmod", modname]
+                self.log_msg(f"Running: {' '.join(cmd)}")
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+                if proc.returncode == 0:
+                    self.log_msg(f"Module '{modname}' unloaded successfully.")
+                    self.module_loaded = False
+                    self._update_module_button_text()
+                else:
+                    self.log_msg(f"rmmod failed (code {proc.returncode}): {proc.stderr.strip()}")
+
+            except subprocess.TimeoutExpired:
+                self.log_msg("Module unload timed out")
+            except Exception as e:
+                self.log_msg(f"Error unloading module: {e}")
+
+        # Если модуль не загружен, загружаем его
+        else:
+            script_dir = Path(__file__).resolve().parent
+            module_path = (script_dir / ".." / "pegasus.ko").resolve()
+            if not module_path.exists():
+                self.log_msg(f"Module not found: {module_path}")
+                return
+
+            try:
+                cmd = ["sudo", "insmod", str(module_path)] if os.geteuid() != 0 else ["insmod", str(module_path)]
+                self.log_msg(f"Running: {' '.join(cmd)}")
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+                if proc.returncode == 0:
+                    self.log_msg(f"Module loaded: {module_path.name}")
+                    self.module_loaded = True
+                    self._update_module_button_text()
+                else:
+                    self.log_msg(f"insmod failed (code {proc.returncode}): {proc.stderr.strip()}")
+                    # Пробуем загрузить через modprobe
+                    modname = module_path.stem
+                    self.log_msg(f"Trying modprobe {modname}")
+                    cmd2 = ["sudo", "modprobe", modname] if os.geteuid() != 0 else ["modprobe", modname]
+                    proc2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=20)
+                    if proc2.returncode == 0:
+                        self.log_msg(f"modprobe succeeded: {modname}")
+                        self.module_loaded = True
+                        self._update_module_button_text()
+                    else:
+                        self.log_msg(f"modprobe failed (code {proc2.returncode}): {proc2.stderr.strip()}")
+            except subprocess.TimeoutExpired:
+                self.log_msg("Module load timed out")
+            except Exception as e:
+                self.log_msg(f"Error loading module: {e}")
+
+    # --- ОСТАЛЬНЫЕ ОБРАБОТЧИКИ (без изменений) ---
+
     def handle_block_v4(self):
         ip = self.ipv4_input.text().strip()
         try:
@@ -395,43 +482,6 @@ class PegasusWindow(QtWidgets.QWidget):
             self.log_msg(f"ioctl error: {e}")
         finally:
             f.close()
-    def handle_load_module(self):
-    # path relative to this script
-        script_dir = Path(__file__).resolve().parent
-        module_path = (script_dir / ".." / "pegasus.ko").resolve()
-        if not module_path.exists():
-            self.log_msg(f"Module not found: {module_path}")
-            return
-    # try insmod first
-        try:
-        # use sudo if not root; prefer running insmod directly if already root
-            if os.geteuid() == 0:
-                cmd = ["insmod", str(module_path)]
-            else:
-                cmd = ["sudo", "insmod", str(module_path)]
-            self.log_msg(f"Running: {' '.join(cmd)}")
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
-            if proc.returncode == 0:
-                self.log_msg(f"Module loaded: {module_path.name}")
-            else:
-            # if already built into kernel or fails, show stderr
-                self.log_msg(f"insmod failed (code {proc.returncode}): {proc.stderr.strip()}")
-            # try modprobe fallback (module name without path)
-                modname = module_path.stem
-                self.log_msg(f"Trying modprobe {modname}")
-                if os.geteuid() == 0:
-                    cmd2 = ["modprobe", modname]
-                else:
-                    cmd2 = ["sudo", "modprobe", modname]
-                proc2 = subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=20)
-                if proc2.returncode == 0:
-                    self.log_msg(f"modprobe succeeded: {modname}")
-                else:
-                    self.log_msg(f"modprobe failed (code {proc2.returncode}): {proc2.stderr.strip()}")
-        except subprocess.TimeoutExpired:
-            self.log_msg("Module load timed out")
-        except Exception as e:
-            self.log_msg(f"Error loading module: {e}")
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
