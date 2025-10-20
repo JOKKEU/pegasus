@@ -58,11 +58,28 @@ other distrib: sudo python3 ./gui.py
 
 Нажимаем Load module pegasus.ko
 
-<img width="638" height="78" alt="image" src="https://github.com/user-attachments/assets/3fb63f2a-458f-49a3-b7aa-d125f71065e5" />
+<img width="1194" height="76" alt="image" src="https://github.com/user-attachments/assets/c3c283f9-4f7a-45cd-944c-dbbbe143aca7" />
+
 
 Завершение работы: нажимаем module unload и закрываем программу.
 
-<img width="323" height="79" alt="image" src="https://github.com/user-attachments/assets/a8c52f72-371b-421f-aac5-791a2ac65f4f" />
+<img width="1195" height="52" alt="image" src="https://github.com/user-attachments/assets/fd945931-05b2-4c37-a6a3-70d38e37209b" />
+
+
+                                                            ||
+                                                            \/
+                                                            
+<img width="1207" height="51" alt="image" src="https://github.com/user-attachments/assets/ce9788a1-7d4b-478f-9635-2994b590bc6b" />
+
+
+
+
+
+
+
+
+
+
 
 
 
