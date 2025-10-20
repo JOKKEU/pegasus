@@ -67,7 +67,6 @@ def ioctl_noarg(fd, cmd):
     fcntl.ioctl(fd, cmd)
 
 def ioctl_with_bytes(fd, cmd, data_bytes):
-    # fcntl.ioctl requires a mutable buffer for some variants — use bytearray
     buf = bytearray(data_bytes)
     fcntl.ioctl(fd, cmd, buf)
     return buf
@@ -76,7 +75,7 @@ def ipv4_to_be32_bytes(ipv4_str):
     ip = IPAddress(ipv4_str)
     if ip.version != 4:
         raise ValueError("Not IPv4")
-    packed = struct.pack("!I", int(ip))  # network byte order
+    packed = struct.pack("!I", int(ip))
     return packed
 
 def ipv6_to_bytes(ipv6_str):
@@ -129,20 +128,14 @@ class PegasusWindow(QtWidgets.QWidget):
         ipv4_box.setLayout(ipv4_layout)
         layout.addWidget(ipv4_box)
 
-        # --- ИЗМЕНЕНИЯ НАЧИНАЮТСЯ ЗДЕСЬ ---
-
-        # 1. Проверяем, загружен ли модуль при запуске
         self.module_loaded = self._is_module_loaded()
 
-        # 2. Создаем кнопку и устанавливаем текст в зависимости от состояния модуля
         self.load_module_btn = QtWidgets.QPushButton()
         self._update_module_button_text()
         layout.addWidget(self.load_module_btn)
 
-        # 3. Подключаем новый обработчик-переключатель
-        self.load_module_btn.clicked.connect(self.handle_toggle_module)
 
-        # --- ИЗМЕНЕНИЯ ЗАКАНЧИВАЮТСЯ ЗДЕСЬ ---
+        self.load_module_btn.clicked.connect(self.handle_toggle_module)
 
         # IPv6 block controls
         ipv6_box = QtWidgets.QGroupBox("")
@@ -223,7 +216,6 @@ class PegasusWindow(QtWidgets.QWidget):
         super().resizeEvent(event)
         if getattr(self, "_bg_label", None):
             self._bg_label.setGeometry(0, 0, self.width(), self.height())
-            # rescale original pixmap to window size to avoid blurry repeats
             orig = QPixmap(str(Path(__file__).resolve().parent.parent / "pegasus_image.jpg"))
             if not orig.isNull():
                 scaled = orig.scaled(self.size(), QtCore.Qt.AspectRatioMode.KeepAspectRatioByExpanding, QtCore.Qt.TransformationMode.SmoothTransformation)
@@ -240,12 +232,9 @@ class PegasusWindow(QtWidgets.QWidget):
             self.log_msg(f"ERROR opening device: {e}")
             return None
 
-    # --- НОВЫЕ И ОБНОВЛЕННЫЕ ФУНКЦИИ ---
 
     def _is_module_loaded(self):
-        """Проверяет, загружен ли модуль ядра 'pegasus'."""
         try:
-            # Команда вернет 0, если модуль найден
             result = subprocess.run("lsmod | grep -w '^pegasus'", shell=True, capture_output=True, text=True)
             return result.returncode == 0
         except Exception as e:
@@ -253,13 +242,10 @@ class PegasusWindow(QtWidgets.QWidget):
             return False
 
     def _update_module_button_text(self):
-        """Обновляет текст на кнопке в зависимости от состояния модуля."""
         text = "Unload module pegasus.ko" if self.module_loaded else "Load module pegasus.ko"
         self.load_module_btn.setText(text)
 
     def handle_toggle_module(self):
-        """Обрабатывает загрузку или выгрузку модуля в зависимости от текущего состояния."""
-        # Если модуль загружен, выгружаем его
         if self.module_loaded:
             modname = "pegasus"
             try:
@@ -279,7 +265,6 @@ class PegasusWindow(QtWidgets.QWidget):
             except Exception as e:
                 self.log_msg(f"Error unloading module: {e}")
 
-        # Если модуль не загружен, загружаем его
         else:
             script_dir = Path(__file__).resolve().parent
             module_path = (script_dir / ".." / "pegasus.ko").resolve()
@@ -298,7 +283,6 @@ class PegasusWindow(QtWidgets.QWidget):
                     self._update_module_button_text()
                 else:
                     self.log_msg(f"insmod failed (code {proc.returncode}): {proc.stderr.strip()}")
-                    # Пробуем загрузить через modprobe
                     modname = module_path.stem
                     self.log_msg(f"Trying modprobe {modname}")
                     cmd2 = ["sudo", "modprobe", modname] if os.geteuid() != 0 else ["modprobe", modname]
@@ -314,7 +298,6 @@ class PegasusWindow(QtWidgets.QWidget):
             except Exception as e:
                 self.log_msg(f"Error loading module: {e}")
 
-    # --- ОСТАЛЬНЫЕ ОБРАБОТЧИКИ (без изменений) ---
 
     def handle_block_v4(self):
         ip = self.ipv4_input.text().strip()
