@@ -21,7 +21,7 @@
 1) Установка:  ```git clone https://github.com/JOKKEU/pegasus ```
 <img width="1008" height="366" alt="image" src="https://github.com/user-attachments/assets/140814f8-11cd-4f9b-b154-a30f410f8b02" />
 
-2) Сборка драйвера: ``` cd pegasus && make ```
+2) Сборка драйвера: ``` cd pegasus && make ``` ( Придется немного изменить Makefile для себя)
 <img width="1762" height="368" alt="image" src="https://github.com/user-attachments/assets/c95dbae0-0e9f-451d-ae66-49a3f52dbcca" />
 
 3) Установка зависимостей:
